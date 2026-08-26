@@ -6,6 +6,7 @@ from pathlib import Path
 
 from degoogle_photos.dates import (
     extract_date,
+    _date_from_exif,
     _date_from_filename,
     _date_from_json_field,
     _date_from_mtime,
@@ -61,6 +62,47 @@ def test_date_from_mtime(tmp_path):
     dt = _date_from_mtime(f)
     assert dt is not None
     assert dt.year >= 2020
+
+
+def _make_jpeg_with_nested_exif(path: Path, exif_sub_ifd: dict) -> None:
+    from PIL import Image
+    img = Image.new("RGB", (1, 1), "white")
+    exif = Image.Exif()
+    exif[0x8769] = exif_sub_ifd
+    img.save(path, exif=exif)
+
+
+def test_date_from_exif_nested_dto(tmp_path):
+    f = tmp_path / "nested.jpg"
+    _make_jpeg_with_nested_exif(f, {36867: "2020:05:10 20:47:59"})
+    dt = _date_from_exif(f)
+    assert dt == datetime(2020, 5, 10, 20, 47, 59)
+
+
+def test_extract_date_exif_nested_source(tmp_path):
+    media = tmp_path / "nested.jpg"
+    _make_jpeg_with_nested_exif(media, {36867: "2021:03:15 14:30:00"})
+    dt, source = extract_date(media, None)
+    assert source == "exif"
+    assert dt == datetime(2021, 3, 15, 14, 30, 0)
+
+
+def test_date_from_exif_flat_fallback(tmp_path):
+    from PIL import Image
+    f = tmp_path / "flat.jpg"
+    img = Image.new("RGB", (1, 1), "white")
+    exif = Image.Exif()
+    exif[36867] = "2019:08:01 12:00:00"
+    img.save(f, exif=exif)
+    dt = _date_from_exif(f)
+    assert dt == datetime(2019, 8, 1, 12, 0, 0)
+
+
+def test_date_from_exif_null_padded(tmp_path):
+    f = tmp_path / "padded.jpg"
+    _make_jpeg_with_nested_exif(f, {36867: "2007:12:31 23:59:59\x00\x00\x00"})
+    dt = _date_from_exif(f)
+    assert dt == datetime(2007, 12, 31, 23, 59, 59)
 
 
 def test_load_json_valid(tmp_path):
