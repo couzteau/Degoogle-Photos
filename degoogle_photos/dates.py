@@ -59,6 +59,11 @@ def extract_date(
     return None, "none"
 
 
+EXIF_SUB_IFD_TAG = 0x8769
+EXIF_DATETIME_TAGS = (36867, 36868, 306)  # DTO, Digitized, DateTime
+EXIF_DATE_FORMAT = "%Y:%m:%d %H:%M:%S"
+
+
 def _date_from_exif(media_path: Path) -> Optional[datetime]:
     """Extract DateTimeOriginal from EXIF data using Pillow."""
     ext = media_path.suffix.lower()
@@ -66,20 +71,36 @@ def _date_from_exif(media_path: Path) -> Optional[datetime]:
         return None
     try:
         from PIL import Image
-        img = Image.open(media_path)
-        exif = img.getexif()
-        if not exif:
-            return None
-        # DateTimeOriginal = 36867, DateTimeDigitized = 36868, DateTime = 306
-        for tag_id in (36867, 36868, 306):
-            val = exif.get(tag_id)
-            if val:
-                # Format: "YYYY:MM:DD HH:MM:SS"
-                dt = datetime.strptime(val, "%Y:%m:%d %H:%M:%S")
-                if dt.year >= 1970:
-                    return dt
+        with Image.open(media_path) as img:
+            exif = img.getexif()
     except Exception:
-        pass
+        return None
+    if not exif:
+        return None
+    return _parse_first_datetime(_exif_datetime_tags(exif))
+
+
+def _exif_datetime_tags(exif) -> list:
+    """Candidate values: nested sub-IFD first, flat fallback."""
+    candidates = []
+    for tag_id in EXIF_DATETIME_TAGS:
+        val = exif.get_ifd(EXIF_SUB_IFD_TAG).get(tag_id) or exif.get(tag_id)
+        if val:
+            candidates.append(val)
+    return candidates
+
+
+def _parse_first_datetime(values) -> Optional[datetime]:
+    for val in values:
+        try:
+            # Strip null/space padding: EXIF ASCII fields are fixed-width and
+            # often padded, which would otherwise make strptime reject the value.
+            val = val.strip("\x00").strip()
+            dt = datetime.strptime(val, EXIF_DATE_FORMAT)
+            if dt.year >= 1970:
+                return dt
+        except (ValueError, TypeError):
+            continue
     return None
 
 
