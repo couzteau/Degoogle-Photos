@@ -18,6 +18,12 @@ def _html_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
+def _js_string(s: str) -> str:
+    """Escape a string for embedding in a single-quoted JS literal within an HTML attribute."""
+    s = s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+    return _html_escape(s)
+
+
 def _slugify(name: str) -> str:
     """Convert an album name to a filesystem/URL-safe slug."""
     s = name.lower().strip()
@@ -49,7 +55,12 @@ class HtmlReport:
     def add_copied(self, dest_path: Path, source_path: Path, dt: Optional[datetime],
                    date_source: str, album: str, had_json: bool,
                    metadata: Optional[dict] = None):
-        folder = f"{dt.year:04d}/{dt.month:02d}" if dt else "needs_review"
+        if not dt:
+            folder = "needs_review"
+        elif date_source == "parent_dir":
+            folder = f"{dt.year:04d}/unknown"
+        else:
+            folder = f"{dt.year:04d}/{dt.month:02d}"
         entry = {
             "name": dest_path.name,
             "dest": str(dest_path),
@@ -138,7 +149,14 @@ class HtmlReport:
         html.append(f'<div class="stat"><span class="num">{total_dupes}</span><span class="label">Duplicates skipped</span></div>')
         html.append(f'<div class="stat"><span class="num">{total_errors}</span><span class="label">Errors</span></div>')
         nr = len(self.files_by_folder.get("needs_review", []))
-        html.append(f'<div class="stat"><span class="num">{nr}</span><span class="label">Needs review</span></div>')
+        if nr > 0:
+            html.append(f'<div class="stat"><span class="num"><a href="folder_needs_review.html">{nr}</a></span>'
+                        f'<span class="label">Needs review</span></div>')
+        unknown_folders = sorted(f for f in self.files_by_folder if f.endswith("/unknown"))
+        unknown_total = sum(len(self.files_by_folder[f]) for f in unknown_folders)
+        if unknown_total > 0:
+            html.append(f'<div class="stat"><span class="num"><a href="#attention-needed">{unknown_total}</a></span>'
+                        f'<span class="label">Unknown month</span></div>')
         html.append('</div>')
 
         # Date source breakdown
@@ -148,14 +166,27 @@ class HtmlReport:
             "json_taken": "JSON photoTakenTime",
             "filename": "Filename pattern",
             "json_created": "JSON creationTime",
-            "mtime": "File modification time",
+            "parent_dir": "Parent directory year",
             "none": "No date found",
         }
-        for key in ["exif", "json_taken", "filename", "json_created", "mtime", "none"]:
+        for key in ["exif", "json_taken", "filename", "json_created", "parent_dir", "none"]:
             cnt = self.date_source_counts.get(key, 0)
             if cnt > 0:
                 html.append(f'<tr><td>{source_labels.get(key, key)}</td><td>{cnt}</td></tr>')
         html.append('</table></section>')
+
+        # Attention needed section (only when such folders are non-empty)
+        if nr > 0 or unknown_folders:
+            html.append('<section class="attention" id="attention-needed"><h2>Attention Needed</h2>')
+            if nr > 0:
+                html.append('<p><a href="folder_needs_review.html">needs_review</a> &mdash; '
+                            f'No date found from any source ({nr} files)</p>')
+            for folder in unknown_folders:
+                count = len(self.files_by_folder[folder])
+                slug = folder.replace("/", "_")
+                html.append(f'<p><a href="folder_{slug}.html">{folder}</a> &mdash; '
+                            f'Year known from parent folder, month unknown ({count} files)</p>')
+            html.append('</section>')
 
         # Album navigation
         if self.files_by_album:
@@ -171,7 +202,7 @@ class HtmlReport:
         for folder in sorted(self.files_by_folder.keys()):
             count = len(self.files_by_folder[folder])
             slug = folder.replace("/", "_")
-            css = ' class="review"' if folder == "needs_review" else ""
+            css = ' class="review"' if folder == "needs_review" or folder.endswith("/unknown") else ""
             html.append(f'<a href="folder_{slug}.html"{css}>{folder} ({count})</a>')
         html.append('</div></section>')
 
@@ -201,6 +232,11 @@ class HtmlReport:
         html = []
         html.append(self._page_head(f"Folder: {folder}", back_link=True))
         html.append(f'<h1>{folder} <span class="count">({len(files)} files)</span></h1>')
+        if folder == "needs_review":
+            html.append('<p class="updated">No date found from any source. '
+                        'Review and move to the correct YYYY/MM/ folder.</p>')
+        elif folder.endswith("/unknown"):
+            html.append('<p class="updated">Year known from parent folder, month unknown.</p>')
         html.append('<div class="file-grid">')
         for f in files:
             html.append(self._render_card(f))
@@ -272,9 +308,9 @@ class HtmlReport:
                       f'title="Open folder in Finder">Finder</a>')
 
         # Copy buttons (clipboard icon: &#x1f4cb;)
-        copy_name_btn = (f'<button class="copy-btn" onclick="copyText(this, \'{_html_escape(f["name"])}\')" '
+        copy_name_btn = (f'<button class="copy-btn" onclick="copyText(this, \'{_js_string(f["name"])}\')" '
                          f'title="Copy filename">&#x1f4cb; Name</button>')
-        copy_path_btn = (f'<button class="copy-btn" onclick="copyText(this, \'{_html_escape(f["dest"])}\')" '
+        copy_path_btn = (f'<button class="copy-btn" onclick="copyText(this, \'{_js_string(f["dest"])}\')" '
                          f'title="Copy full path">&#x1f4cb; Path</button>')
 
         return (
@@ -301,6 +337,11 @@ class DedupReport:
         self.total = 0
         self.copied = 0
         self.errors: list = []   # [{"path": str, "error": str}]
+        self.attention: list = []  # [{"source", "dest", "date_source"}]
+
+    def add_attention(self, src, dest, date_source):
+        """Add a file that needs manual review (needs_review/ or YYYY/unknown/)."""
+        self.attention.append({"source": str(src), "dest": str(dest), "date_source": date_source})
 
     def add_group(self, md5: str, files):
         """Add a duplicate group. files is a list of Path; first entry is the keeper."""
@@ -368,6 +409,37 @@ class DedupReport:
             html.append('<p style="color:#3fb950;margin-top:16px">No duplicates found.</p>')
         html.append('</section>')
 
+        # Files needing attention (only when non-empty)
+        if self.attention:
+            unmatched = [a for a in self.attention if a["date_source"] == "none"]
+            unknown = [a for a in self.attention if a["date_source"] == "parent_dir"]
+            html.append('<section class="attention"><h2>Files Needing Attention</h2>')
+
+            def _row(a):
+                src_btn = (f'<button class="copy-btn" '
+                           f'onclick="copyText(this, \'{_js_string(a["source"])}\')" '
+                           f'title="Copy source path">&#x1f4cb; Src</button>')
+                dst_btn = (f'<button class="copy-btn" '
+                           f'onclick="copyText(this, \'{_js_string(a["dest"])}\')" '
+                           f'title="Copy destination path">&#x1f4cb; Dest</button>')
+                return (f'<tr><td style="font-size:0.8em;word-break:break-all">{_html_escape(a["source"])}</td>'
+                        f'<td style="font-size:0.8em;word-break:break-all">{_html_escape(a["dest"])}</td>'
+                        f'<td style="white-space:nowrap">{src_btn} {dst_btn}</td></tr>')
+
+            if unmatched:
+                html.append('<h3>Unmatched (no date)</h3>')
+                html.append('<table><tr><th>Source</th><th>Destination</th><th></th></tr>')
+                for a in unmatched:
+                    html.append(_row(a))
+                html.append('</table>')
+            if unknown:
+                html.append('<h3>Unknown month</h3>')
+                html.append('<table><tr><th>Source</th><th>Destination</th><th></th></tr>')
+                for a in unknown:
+                    html.append(_row(a))
+                html.append('</table>')
+            html.append('</section>')
+
         # Duplicate groups
         if self.groups:
             html.append('<section><h2>Duplicate Groups</h2>')
@@ -386,7 +458,7 @@ class DedupReport:
                     status_label = "COPIED" if f["keeper"] else "SKIPPED"
                     status_style = 'color:#3fb950' if f["keeper"] else 'color:#8b949e'
                     copy_btn = (
-                        f'<button class="copy-btn" onclick="copyText(this, \'{_html_escape(f["path"])}\')"'
+                        f'<button class="copy-btn" onclick="copyText(this, \'{_js_string(f["path"])}\')"'
                         f' title="Copy path">&#x1f4cb; Path</button>'
                     )
                     html.append(
@@ -450,6 +522,14 @@ h3 { color: #c9d1d9; margin: 14px 0 8px; font-size: 1.1em; }
         padding: 16px 24px; text-align: center; min-width: 140px; }
 .stat .num { display: block; font-size: 2em; font-weight: 700; color: #58a6ff; }
 .stat .label { color: #8b949e; font-size: 0.85em; }
+.stat .num a { color: #58a6ff; text-decoration: none; }
+.stat .num a:hover { text-decoration: underline; }
+.attention { background: #f0883e0f; border: 1px solid #f0883e55; border-radius: 8px;
+             padding: 12px 16px; margin: 20px 0; }
+.attention h2 { color: #f0883e; border-bottom-color: #f0883e55; }
+.attention a { color: #f0883e; font-weight: 600; text-decoration: none; }
+.attention a:hover { text-decoration: underline; }
+.attention p { margin: 6px 0; font-size: 0.9em; }
 table { border-collapse: collapse; width: 100%; margin: 8px 0; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #21262d; font-size: 0.85em; }
 th { color: #8b949e; }
@@ -478,7 +558,7 @@ th { color: #8b949e; }
 .badge-json_taken { background: #23863633; color: #3fb950; }
 .badge-filename { background: #9e6a03aa; color: #e3b341; }
 .badge-json_created { background: #23863633; color: #3fb950; }
-.badge-mtime { background: #f0883e33; color: #f0883e; }
+.badge-parent_dir { background: #f0883e33; color: #f0883e; }
 .badge-none { background: #f8514933; color: #f85149; }
 .badge-json { background: #23863633; color: #3fb950; }
 /* Tooltip via data-tooltip + ::after */

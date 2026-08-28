@@ -1,4 +1,4 @@
-"""Date extraction from EXIF, JSON sidecars, filenames, and file mtimes."""
+"""Date extraction from EXIF, JSON sidecars, filenames, and parent directory names."""
 
 import json
 import re
@@ -15,6 +15,9 @@ FILENAME_DATE_PATTERNS = [
     # YYYYMMDD alone
     re.compile(r'(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])'),
 ]
+
+# 4-digit year in a parent directory name (e.g. "Photos from 2015")
+_PARENT_DIR_YEAR_RE = re.compile(r'(?<!\d)((?:19|20)\d{2})(?!\d)')
 
 
 def extract_date(
@@ -51,10 +54,10 @@ def extract_date(
         if dt:
             return dt, "json_created"
 
-    # 5. File mtime
-    dt = _date_from_mtime(media_path)
-    if dt:
-        return dt, "mtime"
+    # 5. Parent directory year
+    year = _year_from_parent_dir(media_path)
+    if year:
+        return datetime(year, 1, 1), "parent_dir"
 
     return None, "none"
 
@@ -143,13 +146,15 @@ def _date_from_filename(
     return None
 
 
-def _date_from_mtime(media_path: Path) -> Optional[datetime]:
-    """Get date from file modification time."""
-    try:
-        mtime = media_path.stat().st_mtime
-        dt = datetime.fromtimestamp(mtime)
-        if dt.year >= 1970:
-            return dt
-    except Exception:
-        pass
+def _year_from_parent_dir(media_path: Path) -> Optional[int]:
+    """Extract a 4-digit year from the immediate parent directory name.
+
+    Covers Takeout's `Google Photos/Photos from 2015/IMG.jpg` layout.
+    """
+    m = _PARENT_DIR_YEAR_RE.search(media_path.parent.name)
+    if not m:
+        return None
+    year = int(m.group(1))
+    if 1970 <= year <= 2030:
+        return year
     return None

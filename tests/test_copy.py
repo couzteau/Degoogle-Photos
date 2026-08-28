@@ -24,6 +24,13 @@ def test_compute_dest_path_without_date(output_dir):
     assert dest == output_dir / "needs_review" / "photo.jpg"
 
 
+def test_compute_dest_path_parent_dir(output_dir):
+    dt = datetime(2015, 1, 1)
+    media = Path("/fake/photo.jpg")
+    dest = compute_dest_path(output_dir, media, dt, date_source="parent_dir")
+    assert dest == output_dir / "2015" / "unknown" / "photo.jpg"
+
+
 def test_resolve_collision_no_conflict(tmp_path):
     dest = tmp_path / "photo.jpg"
     assert resolve_collision(dest) == dest

@@ -298,14 +298,21 @@ def test_multi_source_symlinks_resolve_across_sources(tmp_path):
 def test_no_date_file_goes_to_needs_review(tmp_path):
     src = tmp_path / "source"
     src.mkdir()
-    # Filename with no date pattern, no EXIF → falls back to mtime (which gives a date)
-    # Force needs_review by using a file that will return mtime... actually mtime always
-    # returns a date, so this path only triggers if mtime itself fails.
-    # Test the date-from-filename path instead with a known pattern-less name:
-    # mtime will give a real date, so file will land in YYYY/MM/, not needs_review.
-    # This test just ensures the file still gets copied somewhere.
+    # Filename has no date pattern, no EXIF, and the parent folder has no year,
+    # so extraction yields (None, "none") -> needs_review/.
     (src / "no_date_in_name.jpg").write_bytes(b"nodatecontent")
     out = tmp_path / "output"
     _run_dedup(make_args(src, out))
     copied = media_files_in_output(out)
     assert len(copied) == 1
+    assert (out / "needs_review" / "no_date_in_name.jpg").exists()
+
+
+def test_parent_dir_year_file_goes_to_unknown(tmp_path):
+    src_dir = tmp_path / "source"
+    folder = src_dir / "Photos from 2015"
+    folder.mkdir(parents=True)
+    (folder / "random_video.mp4").write_bytes(b"nodatecontent")
+    out = tmp_path / "output"
+    _run_dedup(make_args(src_dir, out))
+    assert (out / "2015" / "unknown" / "random_video.mp4").exists()

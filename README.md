@@ -34,9 +34,10 @@ You'll end up with something like `Takeout/`, `Takeout-2/`, `Takeout-3/`, ... ea
 
 **Takeout migration mode** (default):
 - Scans multiple `Takeout*/Google Photos/` directories and builds a global index
-- Extracts the best date for each file (EXIF > JSON photoTakenTime > filename > JSON creationTime > file mtime)
+- Extracts the best date for each file (EXIF > JSON photoTakenTime > filename > JSON creationTime > parent dir year)
 - Deduplicates by MD5 hash + date (rounded to the minute)
 - Copies media files into `YYYY/MM/` folders, preserving JSON sidecars alongside
+  (`YYYY/unknown/` when only the year is known, `needs_review/` when nothing is)
 - Creates `Albums/` folder with relative symlinks for named albums
 - Generates a multi-page HTML report with thumbnails, metadata tooltips, and Finder links
 
@@ -171,7 +172,7 @@ rsync -a --progress \
 
 1. **Index** — Scan all Takeout directories, index media files and JSON sidecars by album
 2. **Match** — Link each media file to its JSON sidecar via title field or filename stripping
-3. **Date extraction** — Extract the best date using a priority cascade (EXIF > JSON > filename > mtime)
+3. **Date extraction** — Extract the best date using a priority cascade (EXIF > JSON > filename > parent dir year)
 4. **Deduplication** — Skip files with identical MD5 + date (within the same minute)
 5. **Copy** — Copy to `YYYY/MM/filename` with collision resolution (`_2`, `_3`, etc.)
 6. **Albums** — Create `Albums/<name>/` with relative symlinks to the copied files
@@ -190,6 +191,7 @@ rsync -a --progress \
 The report is written to `<output>/report/index.html` and includes:
 
 - Dashboard with copy/duplicate/error counts and date-source breakdown
+- "Attention needed" section surfacing files in `needs_review/` and `YYYY/unknown/`
 - Per-folder pages with image thumbnails in a responsive grid
 - Per-album pages for named albums (generic "Photos from YYYY" albums are excluded)
 - Hover tooltips showing EXIF data (camera, ISO, focal length, GPS) and JSON metadata (people, geo, description)
@@ -201,7 +203,7 @@ The report is written to `<output>/report/index.html` and includes:
 degoogle_photos/
   __init__.py          # Package version
   indexing.py          # Takeout directory scanning, JSON sidecar indexing, recursive file finder
-  dates.py             # Date extraction (EXIF, JSON, filename, mtime)
+  dates.py             # Date extraction (EXIF, JSON, filename, parent dir year)
   metadata.py          # Rich metadata extraction for report tooltips
   dedup.py             # MD5 hashing, deduplication keys, duplicate grouping
   copy.py              # File copying with collision resolution

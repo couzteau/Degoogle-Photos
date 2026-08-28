@@ -9,7 +9,7 @@ from degoogle_photos.dates import (
     _date_from_exif,
     _date_from_filename,
     _date_from_json_field,
-    _date_from_mtime,
+    _year_from_parent_dir,
     _load_json,
     FILENAME_DATE_PATTERNS,
 )
@@ -54,14 +54,6 @@ def test_date_from_json_field_missing():
 def test_date_from_json_field_zero_timestamp():
     data = {"photoTakenTime": {"timestamp": "0"}}
     assert _date_from_json_field(data, "photoTakenTime") is None
-
-
-def test_date_from_mtime(tmp_path):
-    f = tmp_path / "test.jpg"
-    f.write_bytes(b"\xff\xd8\xff\xd9")
-    dt = _date_from_mtime(f)
-    assert dt is not None
-    assert dt.year >= 2020
 
 
 def _make_jpeg_with_nested_exif(path: Path, exif_sub_ifd: dict) -> None:
@@ -144,10 +136,48 @@ def test_extract_date_filename_fallback(tmp_path):
     assert dt == datetime(2020, 5, 10)
 
 
-def test_extract_date_mtime_fallback(tmp_path):
-    """File mtime should be the last resort."""
-    media = tmp_path / "random_video.mp4"
+def test_year_from_parent_dir_match(tmp_path):
+    media = tmp_path / "Photos from 2015" / "IMG_001.jpg"
+    media.parent.mkdir(parents=True)
+    assert _year_from_parent_dir(media) == 2015
+
+
+def test_year_from_parent_dir_no_match(tmp_path):
+    media = tmp_path / "no_year_here" / "img.jpg"
+    media.parent.mkdir(parents=True)
+    assert _year_from_parent_dir(media) is None
+
+
+def test_year_from_parent_dir_out_of_range(tmp_path):
+    media = tmp_path / "Photos from 1960" / "img.jpg"
+    media.parent.mkdir(parents=True)
+    assert _year_from_parent_dir(media) is None
+
+
+def test_year_from_parent_dir_digit_boundary(tmp_path):
+    """A year embedded in a longer number (e.g. 12015) must not match."""
+    media = tmp_path / "Photos from 12015" / "img.jpg"
+    media.parent.mkdir(parents=True)
+    assert _year_from_parent_dir(media) is None
+
+
+def test_extract_date_parent_dir_fallback(tmp_path):
+    """Parent directory year is used when nothing else provides a date."""
+    folder = tmp_path / "Photos from 2015"
+    folder.mkdir()
+    media = folder / "random_video.mp4"
     media.write_bytes(b"\x00" * 10)
     dt, source = extract_date(media, None)
-    assert source == "mtime"
-    assert dt is not None
+    assert source == "parent_dir"
+    assert dt == datetime(2015, 1, 1)
+
+
+def test_extract_date_no_date_none(tmp_path):
+    """With no source of a date at all, return (None, 'none')."""
+    folder = tmp_path / "no_year_folder"
+    folder.mkdir()
+    media = folder / "random_video.mp4"
+    media.write_bytes(b"\x00" * 10)
+    dt, source = extract_date(media, None)
+    assert dt is None
+    assert source == "none"

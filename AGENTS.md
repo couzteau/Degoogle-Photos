@@ -14,8 +14,9 @@ Degoogle-Photos is a Python CLI that organizes Google Takeout photo exports into
 
 - **Takeout migration (default):** Scans multiple `Takeout*/Google Photos/` directories,
   builds a global index, extracts the best date per file (EXIF > JSON `photoTakenTime` >
-  filename > JSON `creationTime` > file mtime), deduplicates by MD5 hash + date, copies
-  media into `YYYY/MM/` folders (keeping JSON sidecars alongside), creates `Albums/`
+  filename > JSON `creationTime` > parent dir year), deduplicates by MD5 hash + date, copies
+  media into `YYYY/MM/` folders (keeping JSON sidecars alongside, `YYYY/unknown/` when only
+  the year is known, `needs_review/` when nothing is), creates `Albums/`
   symlinks, and emits an HTML report.
 - **Dedup mode (`--dedup-scan`):** Scans any folder(s) recursively, computes MD5 checksums,
   keeps one file per duplicate group (shortest path wins), copies unique files into a
@@ -64,7 +65,7 @@ pytest -v tests/test_dedup_mode.py -k import_name
 ## Code organization
 
 - `indexing.py` — Takeout directory scanning, JSON sidecar indexing, recursive media finder.
-- `dates.py` — date extraction cascade (EXIF, JSON, filename, mtime).
+- `dates.py` — date extraction cascade (EXIF, JSON, filename, parent dir year).
 - `metadata.py` — rich metadata extraction for report tooltips.
 - `dedup.py` — MD5 hashing, dedup keys, duplicate grouping.
 - `copy.py` — file copying with collision resolution and sidecar handling.

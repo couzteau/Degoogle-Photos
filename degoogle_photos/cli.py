@@ -107,14 +107,16 @@ def _run_dedup(args):
     src_to_dest = {}  # track actual dest for symlink phase
 
     for i, src in enumerate(unique_files, 1):
-        dt, _date_source = extract_date(src, None)
-        dest = compute_dest_path(output_root, src, dt)
+        dt, date_source = extract_date(src, None)
+        dest = compute_dest_path(output_root, src, dt, date_source)
         try:
             if not dry_run:
                 dest = resolve_collision(dest)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)
             src_to_dest[src] = dest
+            if date_source in ("parent_dir", "none"):
+                report.add_attention(src, dest, date_source)
             copied += 1
         except Exception as e:
             msg = f"{type(e).__name__}: {e}"
@@ -242,7 +244,7 @@ def main():
             metadata = extract_metadata(media_path, json_path)
 
             # Compute destination
-            dest_path = compute_dest_path(output_root, media_path, dt)
+            dest_path = compute_dest_path(output_root, media_path, dt, date_source)
 
             # Check resumability
             if is_already_copied(media_path, dest_path):

@@ -6,6 +6,7 @@ from pathlib import Path
 from degoogle_photos.report import (
     HtmlReport,
     _html_escape,
+    _js_string,
     _slugify,
     _GENERIC_ALBUM_RE,
 )
@@ -13,6 +14,12 @@ from degoogle_photos.report import (
 
 def test_html_escape():
     assert _html_escape('<script>"alert&') == '&lt;script&gt;&quot;alert&amp;'
+
+
+def test_js_string():
+    assert _js_string("John's 2015 photos") == "John\\'s 2015 photos"
+    assert _js_string("back\\slash") == "back\\\\slash"
+    assert _js_string("quote \"ok\"") == "quote &quot;ok&quot;"
 
 
 def test_slugify_basic():
@@ -104,6 +111,36 @@ def test_render_card_has_tooltip(output_dir):
     assert "data-tooltip" in html
     assert "Nikon D850" in html
     assert "Finder" in html
+
+
+def test_add_copied_parent_dir_folder_key(output_dir):
+    report = HtmlReport(output_dir, dry_run=True)
+    dest = Path("/out/2015/unknown/photo.jpg")
+    src = Path("/src/photo.jpg")
+    dt = datetime(2015, 1, 1)
+
+    report.add_copied(dest, src, dt, "parent_dir", "Photos from 2015", True)
+
+    assert "2015/unknown" in report.files_by_folder
+    assert len(report.files_by_folder["2015/unknown"]) == 1
+    entry = report.files_by_folder["2015/unknown"][0]
+    assert entry["date_source"] == "parent_dir"
+
+
+def test_index_has_attention_section(output_dir):
+    report = HtmlReport(output_dir, dry_run=True)
+    report.add_copied(Path("/out/needs_review/a.jpg"), Path("/src/a.jpg"),
+                      None, "none", "Album", False)
+    report.add_copied(Path("/out/2015/unknown/b.jpg"), Path("/src/b.jpg"),
+                      datetime(2015, 1, 1), "parent_dir", "Album", False)
+    report._write()
+
+    index = (output_dir / "report" / "index.html").read_text(encoding="utf-8")
+    assert "Attention Needed" in index
+    assert 'href="folder_needs_review.html"' in index
+    assert 'href="folder_2015_unknown.html"' in index
+    assert "No date found from any source" in index
+    assert "Year known from parent folder, month unknown" in index
 
 
 def test_render_card_video(output_dir):

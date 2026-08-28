@@ -6,13 +6,18 @@ from pathlib import Path
 from typing import Optional
 
 
-def compute_dest_path(output_root: Path, media_path: Path, dt: Optional[datetime]) -> Path:
-    """Compute the destination path: output_root/YYYY/MM/filename."""
-    if dt:
-        folder = output_root / f"{dt.year:04d}" / f"{dt.month:02d}"
-    else:
-        folder = output_root / "needs_review"
-    return folder / media_path.name
+def compute_dest_path(output_root: Path, media_path: Path, dt: Optional[datetime],
+                      date_source: Optional[str] = None) -> Path:
+    """Compute the destination path: output_root/YYYY/MM/filename.
+
+    With `date_source == "parent_dir"` only the year is known, so the file goes
+    to `output_root/YYYY/unknown/filename`.
+    """
+    if not dt:
+        return output_root / "needs_review" / media_path.name
+    if date_source == "parent_dir":
+        return output_root / f"{dt.year:04d}" / "unknown" / media_path.name
+    return output_root / f"{dt.year:04d}" / f"{dt.month:02d}" / media_path.name
 
 
 def resolve_collision(dest_path: Path) -> Path:
