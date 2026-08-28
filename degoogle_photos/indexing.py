@@ -155,8 +155,9 @@ SIDECAR_SUFFIXES = [
 ]
 
 # Sidecar suffix bodies without the trailing ".json" (used for the "(N)" form),
-# most specific -> least. The final ".json" body is excluded: that would also
-# match the ambiguous plain "<base>(N).json" form, which is deliberately unsupported.
+# most specific -> least. The final ".json" body is excluded so the ambiguous
+# plain "<base>(N).json" form isn't mis-parsed here — the plain-suffix fall-through
+# below handles it instead.
 _SIDECAR_BODIES = [
     suffix[: -len(".json")] for suffix in SIDECAR_SUFFIXES if len(suffix) > len(".json")
 ]
@@ -182,12 +183,15 @@ def _parse_sidecar_name(json_filename: str) -> Optional[Tuple[str, Optional[str]
                 base = before[: len(before) - len(body)]
                 if base:
                     return (base, dup_num)
-        return None
+        # Ambiguous "<base>(N).json" form: fall through to plain-suffix matching.
+        pass
 
     lower = json_filename.lower()
     for suffix in SIDECAR_SUFFIXES:
         if lower.endswith(suffix):
-            return (json_filename[: len(json_filename) - len(suffix)], None)
+            base = json_filename[: len(json_filename) - len(suffix)]
+            if base:
+                return (base, None)
     return None
 
 

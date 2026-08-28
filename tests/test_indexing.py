@@ -124,13 +124,19 @@ def test_find_json_for_media_prefix_match(tmp_path):
     assert result is not None
 
 
-def test_parse_sidecar_name():
+def test_parse_sidecar_name_empty_base():
+    """Empty stripped bases are never returned (indices would get a garbage "" key)."""
+    assert _parse_sidecar_name(".json") is None
+    assert _strip_sidecar_suffix(".json") is None
+
+
+
     assert _parse_sidecar_name("photo.jpg.json") == ("photo.jpg", None)
     assert _parse_sidecar_name("photo.jpg.supplemental-metadata.json") == ("photo.jpg", None)
     assert _parse_sidecar_name("IMG_0003.HEIC.supplemental-metadata(1).json") == ("IMG_0003.HEIC", "1")
     assert _parse_sidecar_name("IMG_0003.HEIC.supplemental(2).json") == ("IMG_0003.HEIC", "2")
     assert _parse_sidecar_name("IMG_0003.HEIC.sup(3).json") == ("IMG_0003.HEIC", "3")
-    assert _parse_sidecar_name("IMG_0003.HEIC(1).json") is None  # plain short form not handled
+    assert _parse_sidecar_name("IMG_0003.HEIC(1).json") == ("IMG_0003.HEIC(1)", None)
     assert _parse_sidecar_name("not_a_sidecar.txt") is None
 
 
@@ -228,6 +234,23 @@ def test_build_index_edited_uppercase(fake_takeout):
     edited = [p for p, _ in media if p.name == "IMG_5-EDITED.jpg" and p.parent.name == "Album5"][0]
 
     assert find_json_for_media(edited, "Album5", json_idx).name == "IMG_5.jpg.supplemental-metadata.json"
+
+
+def test_find_json_for_media_ambiguous_dup_form(fake_takeout):
+    """The plain "<base>(N).json" sidecar form matches its (N) media file."""
+    album_dir = fake_takeout / "Takeout1" / "Google Photos" / "Album6"
+    album_dir.mkdir(parents=True)
+    (album_dir / "IMG_0003.jpg").write_bytes(b"\x00" * 20)
+    (album_dir / "IMG_0003(1).jpg").write_bytes(b"\x00" * 20)
+    (album_dir / "IMG_0003(1).jpg.json").write_text(
+        "not json", encoding="utf-8"  # title unusable -> strip path
+    )
+
+    dirs = find_takeout_dirs(fake_takeout)
+    media, json_idx = build_index(dirs, MEDIA_EXTENSIONS)
+    dup = [p for p, _ in media if p.name == "IMG_0003(1).jpg" and p.parent.name == "Album6"][0]
+
+    assert find_json_for_media(dup, "Album6", json_idx).name == "IMG_0003(1).jpg.json"
 
 
 def test_find_json_for_media_dup_fallback(fake_takeout):

@@ -47,7 +47,13 @@ def copy_with_sidecar(
     dest_path: Path,
     dry_run: bool,
 ) -> Path:
-    """Copy media file (and its JSON sidecar) to dest_path. Returns actual dest used."""
+    """Copy media file (and its JSON sidecar) to dest_path. Returns actual dest used.
+
+    Several media files may share one sidecar via fallback matching (e.g.
+    `foo(1).jpg` inheriting `foo.jpg`'s JSON). Each copied file gets its own
+    renamed JSON alongside — this copy-per-inheriting-file behavior is intended
+    (resolves the open question in plan 0002).
+    """
     dest_path = resolve_collision(dest_path)
 
     if not dry_run:
