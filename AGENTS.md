@@ -17,7 +17,8 @@ Degoogle-Photos is a Python CLI that organizes Google Takeout photo exports into
   filename > JSON `creationTime` > parent dir year), deduplicates by MD5 hash + date, copies
   media into `YYYY/MM/` folders (keeping JSON sidecars alongside, `YYYY/unknown/` when only
   the year is known, `needs_review/` when nothing is), creates `Albums/`
-  symlinks, and emits an HTML report. Sidecar matching falls back from a file's own JSON to
+  symlinks, and emits an HTML report. Reruns are resume-safe, including in-place
+  renames of sniffed destinations from older output. Sidecar matching falls back from a file's own JSON to
   `-edited`/`(N)` variants, and Live Photo videos (MP4/MOV) inherit their same-stem still's
   sidecar. Mislabeled `.heic`-named video files are sniffed by magic bytes (`sniff.py`) and
   copied with their real `.mp4`/`.mov` name.

@@ -40,6 +40,40 @@ def resolve_collision(dest_path: Path) -> Path:
         counter += 1
 
 
+def sniffed_rename_old_path(media_path: Path, dest_path: Path) -> Optional[Path]:
+    """Return the wrongly-named path a sniffed-rename resume would recover.
+
+    If media_path's name differs from dest_path's (sniffed rename) and a file
+    exists at media_path's original name while dest_path does not yet exist,
+    return that old-name path; otherwise return None. Pure guard, no I/O
+    beyond existence checks, so it is safe for dry-run detection.
+    """
+    if media_path.name == dest_path.name:
+        return None
+    old = dest_path.parent / media_path.name
+    if dest_path.exists() or not old.exists():
+        return None
+    return old
+
+
+def fix_rename_resume(media_path: Path, dest_path: Path) -> None:
+    """If dest_path's name differs from media_path's (sniffed rename), and an
+    old wrongly-named file exists at media_path's original name while
+    dest_path does not yet exist, rename it (and its sidecar) in place.
+
+    Pure guard: returns immediately when names match, dest already exists, or
+    the old-name file is absent.
+    """
+    old = sniffed_rename_old_path(media_path, dest_path)
+    if old is None:
+        return
+    old.rename(dest_path)
+    old_sidecar = old.parent / (old.name + ".json")
+    sidecar_dest = dest_path.parent / (dest_path.name + ".json")
+    if old_sidecar.exists() and not sidecar_dest.exists():
+        old_sidecar.rename(sidecar_dest)
+
+
 def is_already_copied(source: Path, dest: Path) -> bool:
     """Check if file was already copied (same name + same size = skip for resume)."""
     if not dest.exists():

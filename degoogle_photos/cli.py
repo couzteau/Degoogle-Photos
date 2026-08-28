@@ -12,7 +12,14 @@ from .indexing import find_takeout_dirs, build_index, find_json_for_media, find_
 from .dates import extract_date
 from .metadata import extract_metadata
 from .dedup import compute_md5, make_dedup_key, group_duplicates
-from .copy import compute_dest_path, resolve_collision, is_already_copied, copy_with_sidecar
+from .copy import (
+    compute_dest_path,
+    resolve_collision,
+    is_already_copied,
+    copy_with_sidecar,
+    fix_rename_resume,
+    sniffed_rename_old_path,
+)
 from .sniff import effective_media_name
 from .albums import create_album_symlinks
 from .logging_util import MigrationLog
@@ -253,8 +260,15 @@ def main():
                 dest_name=effective_media_name(media_path),
             )
 
-            # Check resumability
-            if is_already_copied(media_path, dest_path):
+            # Check resumability (rename sniffed dest before checking so a
+            # rerun after the sniff reshape does not duplicate old output).
+            # In dry-run, detect the same resume without touching the filesystem.
+            if dry_run:
+                resume_dest = sniffed_rename_old_path(media_path, dest_path) or dest_path
+            else:
+                fix_rename_resume(media_path, dest_path)
+                resume_dest = dest_path
+            if is_already_copied(media_path, resume_dest):
                 log.skipped_resume += 1
                 log.log(f"SKIP_RESUME: {media_path} -> {dest_path}")
                 log.html.add_copied(dest_path, media_path, dt, date_source,
