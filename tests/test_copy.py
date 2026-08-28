@@ -31,6 +31,29 @@ def test_compute_dest_path_parent_dir(output_dir):
     assert dest == output_dir / "2015" / "unknown" / "photo.jpg"
 
 
+def test_compute_dest_path_dest_name_dated(output_dir):
+    """dest_name overrides the destination filename (dated path)."""
+    dt = datetime(2020, 5, 10)
+    media = Path("/fake/IMG_1234.HEIC")
+    dest = compute_dest_path(output_dir, media, dt, dest_name="IMG_1234.mp4")
+    assert dest == output_dir / "2020" / "05" / "IMG_1234.mp4"
+
+
+def test_compute_dest_path_dest_name_unknown(output_dir):
+    dt = datetime(2015, 1, 1)
+    media = Path("/fake/IMG_1234.HEIC")
+    dest = compute_dest_path(
+        output_dir, media, dt, date_source="parent_dir", dest_name="IMG_1234.mp4"
+    )
+    assert dest == output_dir / "2015" / "unknown" / "IMG_1234.mp4"
+
+
+def test_compute_dest_path_dest_name_needs_review(output_dir):
+    media = Path("/fake/IMG_1234.HEIC")
+    dest = compute_dest_path(output_dir, media, None, dest_name="IMG_1234.mp4")
+    assert dest == output_dir / "needs_review" / "IMG_1234.mp4"
+
+
 def test_resolve_collision_no_conflict(tmp_path):
     dest = tmp_path / "photo.jpg"
     assert resolve_collision(dest) == dest

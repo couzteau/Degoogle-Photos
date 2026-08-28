@@ -17,7 +17,10 @@ Degoogle-Photos is a Python CLI that organizes Google Takeout photo exports into
   filename > JSON `creationTime` > parent dir year), deduplicates by MD5 hash + date, copies
   media into `YYYY/MM/` folders (keeping JSON sidecars alongside, `YYYY/unknown/` when only
   the year is known, `needs_review/` when nothing is), creates `Albums/`
-  symlinks, and emits an HTML report.
+  symlinks, and emits an HTML report. Sidecar matching falls back from a file's own JSON to
+  `-edited`/`(N)` variants, and Live Photo videos (MP4/MOV) inherit their same-stem still's
+  sidecar. Mislabeled `.heic`-named video files are sniffed by magic bytes (`sniff.py`) and
+  copied with their real `.mp4`/`.mov` name.
 - **Dedup mode (`--dedup-scan`):** Scans any folder(s) recursively, computes MD5 checksums,
   keeps one file per duplicate group (shortest path wins), copies unique files into a
   date-organised `YYYY/MM/` structure, and recreates the source folder tree under
@@ -68,6 +71,7 @@ pytest -v tests/test_dedup_mode.py -k import_name
 - `dates.py` — date extraction cascade (EXIF, JSON, filename, parent dir year).
 - `metadata.py` — rich metadata extraction for report tooltips.
 - `dedup.py` — MD5 hashing, dedup keys, duplicate grouping.
+- `sniff.py` — magic-byte detection for mislabeled `.heic`-as-video Live Photo parts.
 - `copy.py` — file copying with collision resolution and sidecar handling.
 - `albums.py` — album symlink creation.
 - `report.py` — HTML report generation (migration + dedup modes).

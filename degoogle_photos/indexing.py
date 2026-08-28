@@ -262,6 +262,22 @@ def _media_name_candidates(media_name: str) -> List[str]:
     return candidates
 
 
+def _live_photo_still_names(media_name: str) -> List[str]:
+    """Return same-stem still candidates for a Live Photo video.
+
+    Google Photos stores iPhone Live Photos as a still (HEIC/JPG/JPEG) plus a
+    ~3s MP4/MOV, but typically only the still gets a JSON sidecar. For video
+    files only, return the same-stem still names the video can inherit a
+    sidecar from (e.g. `IMG_1234.MP4` -> `IMG_1234.heic/.jpg/.jpeg`). Empty
+    list for non-videos.
+    """
+    ext = Path(media_name).suffix.lower()
+    if ext not in {".mp4", ".mov"}:
+        return []
+    stem = Path(media_name).stem
+    return [f"{stem}.heic", f"{stem}.jpg", f"{stem}.jpeg"]
+
+
 def find_json_for_media(
     media_path: Path,
     album_name: str,
@@ -272,7 +288,9 @@ def find_json_for_media(
     Strategy:
     1. Look up each media-name candidate (original, minus -edited, minus (N))
        by exact match in the album's index (title-based or strip-based)
-    2. For truncated JSON names, check if any indexed title starts with a prefix
+    2. Live Photo inheritance: a video with no sidecar inherits the same-stem
+       still's sidecar (exact stem equality beats fuzz)
+    3. For truncated JSON names, check if any indexed title starts with a prefix
        of the media filename
     """
     album_key = album_name.lower()
@@ -286,6 +304,14 @@ def find_json_for_media(
     for candidate in _media_name_candidates(media_path.name):
         if candidate.lower() in album_jsons:
             return album_jsons[candidate.lower()]
+
+    # Live Photo pair inheritance: MP4/MOV video inherits its still's sidecar.
+    # Candidate stripping runs first so a renamed IMG_1234(1).MP4 still resolves
+    # via IMG_1234.HEIC's sidecar. Same album only (the index is per-album).
+    for candidate in _media_name_candidates(media_path.name):
+        for still_name in _live_photo_still_names(candidate):
+            if still_name.lower() in album_jsons:
+                return album_jsons[still_name.lower()]
 
     # Prefix matching for heavily truncated JSON filenames
     best_match = None

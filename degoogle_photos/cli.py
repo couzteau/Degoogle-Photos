@@ -13,6 +13,7 @@ from .dates import extract_date
 from .metadata import extract_metadata
 from .dedup import compute_md5, make_dedup_key, group_duplicates
 from .copy import compute_dest_path, resolve_collision, is_already_copied, copy_with_sidecar
+from .sniff import effective_media_name
 from .albums import create_album_symlinks
 from .logging_util import MigrationLog
 from .report import DedupReport
@@ -108,7 +109,10 @@ def _run_dedup(args):
 
     for i, src in enumerate(unique_files, 1):
         dt, date_source = extract_date(src, None)
-        dest = compute_dest_path(output_root, src, dt, date_source)
+        dest = compute_dest_path(
+            output_root, src, dt, date_source,
+            dest_name=effective_media_name(src),
+        )
         try:
             if not dry_run:
                 dest = resolve_collision(dest)
@@ -243,8 +247,11 @@ def main():
             # Extract rich metadata for report tooltips
             metadata = extract_metadata(media_path, json_path)
 
-            # Compute destination
-            dest_path = compute_dest_path(output_root, media_path, dt, date_source)
+            # Compute destination (mislabeled .heic videos get their real name)
+            dest_path = compute_dest_path(
+                output_root, media_path, dt, date_source,
+                dest_name=effective_media_name(media_path),
+            )
 
             # Check resumability
             if is_already_copied(media_path, dest_path):

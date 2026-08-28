@@ -171,7 +171,7 @@ rsync -a --progress \
 ### Takeout migration
 
 1. **Index** — Scan all Takeout directories, index media files and JSON sidecars by album
-2. **Match** — Link each media file to its JSON sidecar via title field or filename stripping
+2. **Match** — Link each media file to its JSON sidecar via title field or filename stripping. Videos without a sidecar inherit the same-stem Live Photo still's sidecar, and mislabeled `.heic`-named video files are detected by magic bytes and copied with their real `.mp4`/`.mov` name.
 3. **Date extraction** — Extract the best date using a priority cascade (EXIF > JSON > filename > parent dir year)
 4. **Deduplication** — Skip files with identical MD5 + date (within the same minute)
 5. **Copy** — Copy to `YYYY/MM/filename` with collision resolution (`_2`, `_3`, etc.)
@@ -206,6 +206,7 @@ degoogle_photos/
   dates.py             # Date extraction (EXIF, JSON, filename, parent dir year)
   metadata.py          # Rich metadata extraction for report tooltips
   dedup.py             # MD5 hashing, deduplication keys, duplicate grouping
+  sniff.py             # Magic-byte detection for mislabeled .heic-as-video files
   copy.py              # File copying with collision resolution
   report.py            # HTML report generation (migration + dedup modes)
   logging_util.py      # Migration logging and progress reporting
