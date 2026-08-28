@@ -2,6 +2,10 @@
 
 Unfuck the mess that Google Takeout makes of your photo library. Takes the dozens of chaotic zip archives, deduplicates, extracts dates, and organizes everything into clean `YYYY/MM/` folders with album symlinks and a browsable HTML report.
 
+## About this fork
+
+This is a fork of [couzteau/Degoogle-Photos](https://github.com/couzteau/Degoogle-Photos) with fixes applied on top — currently a nested EXIF created-date fix (see [plans/exif-create-date-fix.md](plans/exif-create-date-fix.md)) — which will hopefully be merged into the original repository.
+
 ## Why this exists
 
 **If you're not paying for the product, you are the product.**
