@@ -1,6 +1,7 @@
 """Index Takeout directories — find media files and JSON sidecars."""
 
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -98,10 +99,17 @@ def build_index(
                     if title:
                         json_index[album_key][title.lower()] = fpath
 
-                    # Also index by stripping known sidecar suffixes
-                    stripped = _strip_sidecar_suffix(name)
-                    if stripped:
-                        json_by_strip[album_key][stripped.lower()] = fpath
+                    # Also index by parsing the sidecar naming conventions.
+                    parsed = _parse_sidecar_name(name)
+                    if parsed:
+                        base, dup_num = parsed
+                        json_by_strip[album_key][base.lower()] = fpath
+                        if dup_num is not None:
+                            # Reconstruct the duplicate media name so the renamed
+                            # media (e.g. IMG_0003(1).HEIC) gets a direct hit even
+                            # when the sidecar title is missing/corrupt.
+                            reconstructed = _insert_dup_number(base, dup_num)
+                            json_by_strip[album_key][reconstructed.lower()] = fpath
                 else:
                     ext = fpath.suffix.lower()
                     if ext in media_extensions:
@@ -146,14 +154,55 @@ SIDECAR_SUFFIXES = [
     ".json",
 ]
 
+# Sidecar suffix bodies without the trailing ".json" (used for the "(N)" form),
+# most specific -> least. The final ".json" body is excluded: that would also
+# match the ambiguous plain "<base>(N).json" form, which is deliberately unsupported.
+_SIDECAR_BODIES = [
+    suffix[: -len(".json")] for suffix in SIDECAR_SUFFIXES if len(suffix) > len(".json")
+]
 
-def _strip_sidecar_suffix(json_filename: str) -> Optional[str]:
-    """Strip known sidecar suffixes to recover the media filename."""
+# Matches a Google duplicate-rename suffix immediately before the ".json": <base>(N).json
+_DUP_NUM_RE = re.compile(r"\((\d+)\)\.json$")
+
+
+def _parse_sidecar_name(json_filename: str) -> Optional[Tuple[str, Optional[str]]]:
+    """
+    Recover the media filename a sidecar describes.
+
+    Returns (media_base, dup_number) where dup_number is the "(N)" suffix (as a
+    string) when the sidecar was renamed for a duplicate, else None. Returns None
+    if the filename is not a recognisable sidecar.
+    """
+    dup_match = _DUP_NUM_RE.search(json_filename)
+    if dup_match:
+        dup_num = dup_match.group(1)
+        before = json_filename[: dup_match.start()]
+        for body in _SIDECAR_BODIES:
+            if before.lower().endswith(body):
+                base = before[: len(before) - len(body)]
+                if base:
+                    return (base, dup_num)
+        return None
+
     lower = json_filename.lower()
     for suffix in SIDECAR_SUFFIXES:
         if lower.endswith(suffix):
-            return json_filename[: len(json_filename) - len(suffix)]
+            return (json_filename[: len(json_filename) - len(suffix)], None)
     return None
+
+
+def _strip_sidecar_suffix(json_filename: str) -> Optional[str]:
+    """Strip known sidecar suffixes to recover the media filename."""
+    parsed = _parse_sidecar_name(json_filename)
+    if parsed:
+        return parsed[0]
+    return None
+
+
+def _insert_dup_number(media_base: str, dup_num: str) -> str:
+    """Insert a "(N)" suffix before the extension of media_base."""
+    p = Path(media_base)
+    return f"{p.stem}({dup_num}){p.suffix}"
 
 
 def find_all_media_files(source_root: Path, media_extensions: Set[str]) -> List[Path]:
@@ -168,6 +217,47 @@ def find_all_media_files(source_root: Path, media_extensions: Set[str]) -> List[
     return files
 
 
+def _strip_media_variants(media_name: str) -> List[str]:
+    """Return media_name variants with a single trailing -edited or (N) removed."""
+    p = Path(media_name)
+    stem = p.stem
+    suffix = p.suffix
+    results = []
+
+    edited_stem, edited_n = re.subn(r"-edited$", "", stem, flags=re.IGNORECASE)
+    if edited_n:
+        results.append(edited_stem + suffix)
+
+    dup_stem, dup_n = re.subn(r"\(\d+\)$", "", stem)
+    if dup_n:
+        results.append(dup_stem + suffix)
+
+    return results
+
+
+def _media_name_candidates(media_name: str) -> List[str]:
+    """
+    BFS over progressively simpler media names (most specific first).
+
+    Strips trailing "-edited" and/or "(N)" from the stem, e.g.:
+      img_5_1734391186378-edited.jpg  -> + img_5_1734391186378.jpg
+      IMG_0003(1).HEIC                -> + IMG_0003.HEIC
+      a(1)-edited.jpg                 -> + a(1).jpg -> + a.jpg
+    The original name is always first so a file's own sidecar wins.
+    """
+    candidates = [media_name]
+    seen = {media_name}
+    queue = [media_name]
+    while queue:
+        current = queue.pop(0)
+        for variant in _strip_media_variants(current):
+            if variant not in seen:
+                seen.add(variant)
+                candidates.append(variant)
+                queue.append(variant)
+    return candidates
+
+
 def find_json_for_media(
     media_path: Path,
     album_name: str,
@@ -176,8 +266,10 @@ def find_json_for_media(
     """
     Find the JSON sidecar for a media file.
     Strategy:
-    1. Look up by exact media filename in the album's index (title-based or strip-based)
-    2. For truncated JSON names, check if any indexed title starts with a prefix of the media filename
+    1. Look up each media-name candidate (original, minus -edited, minus (N))
+       by exact match in the album's index (title-based or strip-based)
+    2. For truncated JSON names, check if any indexed title starts with a prefix
+       of the media filename
     """
     album_key = album_name.lower()
     album_jsons = json_index.get(album_key)
@@ -186,9 +278,10 @@ def find_json_for_media(
 
     media_name_lower = media_path.name.lower()
 
-    # Direct match
-    if media_name_lower in album_jsons:
-        return album_jsons[media_name_lower]
+    # Direct match, trying each candidate in most-specific-first order
+    for candidate in _media_name_candidates(media_path.name):
+        if candidate.lower() in album_jsons:
+            return album_jsons[candidate.lower()]
 
     # Prefix matching for heavily truncated JSON filenames
     best_match = None

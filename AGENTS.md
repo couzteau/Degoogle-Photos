@@ -28,7 +28,10 @@ The package is pure Python stdlib plus `Pillow`. Build/packaging is managed excl
 
 ## Repository layout
 
-- `plans/` — implementation plans for upcoming or in-flight work.
+- `plans/` — implementation plans. Active plans live in `plans/NNNN-slug.md` (4-digit,
+  zero-padded numbers, never reused or renumbered — check existing files to find the
+  next number). Completed plans live in `plans/archive/`; move with `git mv` when done
+  without editing the file — folder position is the status marker.
 
 ## Setup and verification
 
