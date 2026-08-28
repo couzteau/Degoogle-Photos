@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "degoogle-photos"
-version = "0.2.1"
+version = "1.0.0"
 description = "Organize Google Takeout photos into YYYY/MM/ folders with dedup and reporting"
 readme = "README.md"
 license = "MIT"
@@ -31,9 +31,9 @@ dependencies = ["Pillow>=9.1"]
 dev = ["pytest>=7.0"]
 
 [project.urls]
-Homepage = "https://github.com/couzteau/Degoogle-Photos"
-Repository = "https://github.com/couzteau/Degoogle-Photos"
-Issues = "https://github.com/couzteau/Degoogle-Photos/issues"
+Homepage = "https://github.com/sychu/Degoogle-Photos-Edge"
+Repository = "https://github.com/sychu/Degoogle-Photos-Edge"
+Issues = "https://github.com/sychu/Degoogle-Photos-Edge/issues"
 
 [tool.setuptools.packages.find]
 include = ["degoogle_photos*"]

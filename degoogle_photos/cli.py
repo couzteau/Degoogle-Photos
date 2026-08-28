@@ -200,8 +200,8 @@ def main():
     parser.add_argument("--source", type=Path, nargs="+", default=[Path.cwd()],
                         help="One or more source folders. For migration: root containing Takeout dirs. "
                              "For --dedup-scan: any folders to scan (repeat --source or space-separate).")
-    parser.add_argument("--output", type=Path, default=Path.cwd() / "DeGoogled Photos",
-                        help="Output root for organized photos or dedup report (default: ./DeGoogled Photos)")
+    parser.add_argument("--output", type=Path, default=Path.cwd() / "DeGoogle-Edge Photos",
+                        help="Output root for organized photos or dedup report (default: ./DeGoogle-Edge Photos)")
 
     # Dedup mode
     parser.add_argument("--dedup-scan", action="store_true",
@@ -212,8 +212,8 @@ def main():
     args = parser.parse_args()
 
     if args.dedup_scan:
-        if args.output == Path.cwd() / "DeGoogled Photos":
-            args.output = Path.cwd() / "Deduped Photos"
+        if args.output == Path.cwd() / "DeGoogle-Edge Photos":
+            args.output = Path.cwd() / "Deduped-Edge Photos"
         _run_dedup(args)
         return
 

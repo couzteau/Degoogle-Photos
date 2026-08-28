@@ -4,7 +4,7 @@ Unfuck the mess that Google Takeout makes of your photo library. Takes the dozen
 
 ## About this fork
 
-This is a fork of [couzteau/Degoogle-Photos](https://github.com/couzteau/Degoogle-Photos) with fixes applied on top — currently a nested EXIF created-date fix (see [plans/exif-create-date-fix.md](plans/exif-create-date-fix.md)) — which will hopefully be merged into the original repository.
+This is a fork of [couzteau/Degoogle-Photos](https://github.com/couzteau/Degoogle-Photos) with edge-case fixes applied on top (nested EXIF created-date, sidecar matching for `-edited`/`(N)` names, Live Photo sidecar inheritance, mislabeled `.heic`-as-video sniffing, rerun-safe resume) — which will hopefully be merged into the original repository.
 
 ## Why this exists
 
@@ -54,28 +54,21 @@ You'll end up with something like `Takeout/`, `Takeout-2/`, `Takeout-3/`, ... ea
 
 ## Installation
 
-[![PyPI](https://img.shields.io/pypi/v/degoogle-photos)](https://pypi.org/project/degoogle-photos/)
+This fork is not published on PyPI — install from the cloned GitHub repository:
 
-**Windows:**
 ```bash
-pip install degoogle-photos
+git clone https://github.com/sychu/Degoogle-Photos-Edge.git
+cd Degoogle-Photos-Edge
+pip install .
 ```
 
-**macOS / Linux:**
+That's it. Pillow (for EXIF extraction) is installed automatically. The `degoogle-photos` command is then available on your PATH.
+
+You can also run it straight from the clone without installing, using the module entry point:
+
 ```bash
-pip3 install degoogle-photos
+python3 -m degoogle_photos.cli --source /path/to/takeouts --output /path/to/organized
 ```
-
-That's it. Pillow (for EXIF extraction) is installed automatically.
-
-> **Why `pip3`?** Many macOS and Linux systems still have Python 2.7 as the default `pip`. If you see "No matching distribution found" or warnings about Python 2.7, that's why. `pip3` ensures you're using Python 3.
-
-> **Troubleshooting — macOS: `command not found: degoogle-photos`?** The package installed correctly, but pip placed the executable in a user-local directory that isn't on your PATH by default. Fix it by running:
-> ```bash
-> export PATH="$HOME/Library/Python/3.9/bin:$PATH"
-> degoogle-photos
-> ```
-> Replace `3.9` with your actual Python version (check with `python3 --version`). To make this permanent so it survives Terminal restarts, add the export line to your `~/.zshrc`.
 
 ## Usage
 
@@ -162,7 +155,7 @@ rsync -a --progress \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--source PATH [PATH ...]` | current directory | One or more source folders. For migration: root containing Takeout dirs. For `--dedup-scan`: any folders to scan. |
-| `--output PATH` | `./DeGoogled Photos` | Destination for organised photos or dedup output |
+| `--output PATH` | `./DeGoogle-Edge Photos` | Destination for organised photos or dedup output |
 | `--dry-run` | off | Report what would be done without copying any files |
 | `--dedup-scan` | off | Dedup mode: scan any folder(s) instead of running a Takeout migration |
 
@@ -247,7 +240,7 @@ After running degoogle-photos, create an API key in the Immich web UI (Account S
 
 ```bash
 immich login http://localhost:2283 YOUR-API-KEY
-immich upload --recursive /path/to/DeGoogled\ Photos
+immich upload --recursive "/path/to/DeGoogle-Edge Photos"
 ```
 
 Immich will pick up the dates and folder structure automatically.
