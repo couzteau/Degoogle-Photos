@@ -11,6 +11,15 @@ Thanks for your interest in making this tool better. Whether you're fixing a bug
 ```
 
 2. **Set up development environment**
+
+   A virtual environment is optional but recommended — it keeps the project's
+   dependencies isolated from your system Python:
+```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+```
+
+   Install the package with dev dependencies:
 ```bash
    pip3 install -e ".[dev]"
 ```

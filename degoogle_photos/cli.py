@@ -107,7 +107,16 @@ def _run_dedup(args):
     src_to_dest = {}  # track actual dest for symlink phase
 
     for i, src in enumerate(unique_files, 1):
-        dt, _date_source = extract_date(src, None)
+        try:
+            dt, _date_source = extract_date(src, None)
+        except Exception as e:
+            # Date extraction must not take down the whole run: record the error
+            # and fall back to the date-less "needs_review" destination so the
+            # file is still copied rather than dropped.
+            msg = f"{type(e).__name__}: {e}"
+            report.add_error(src, msg)
+            errors += 1
+            dt = None
         dest = compute_dest_path(output_root, src, dt)
         try:
             if not dry_run:
