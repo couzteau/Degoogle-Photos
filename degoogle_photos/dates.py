@@ -65,7 +65,12 @@ EXIF_DATE_FORMAT = "%Y:%m:%d %H:%M:%S"
 
 
 def _date_from_exif(media_path: Path) -> Optional[datetime]:
-    """Extract DateTimeOriginal from EXIF data using Pillow."""
+    """Extract DateTimeOriginal from EXIF data using Pillow.
+
+    Never raises: malformed/truncated EXIF, an absent sub-IFD, or an unparseable
+    date is treated as "no date" so one bad file can't take down a whole run
+    (dedup-scan mode has no per-file error handling around date extraction).
+    """
     ext = media_path.suffix.lower()
     if ext not in {".jpg", ".jpeg", ".tiff", ".tif", ".png"}:
         return None
@@ -73,11 +78,11 @@ def _date_from_exif(media_path: Path) -> Optional[datetime]:
         from PIL import Image
         with Image.open(media_path) as img:
             exif = img.getexif()
+        if not exif:
+            return None
+        return _parse_first_datetime(_exif_datetime_tags(exif))
     except Exception:
         return None
-    if not exif:
-        return None
-    return _parse_first_datetime(_exif_datetime_tags(exif))
 
 
 def _exif_datetime_tags(exif) -> list:
