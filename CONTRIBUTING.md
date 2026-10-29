@@ -71,6 +71,20 @@ Include:
 - Reference issue numbers when relevant (`Fix #42: Handle missing geoDataExif field`)
 - Keep commits focused - one logical change per commit
 
+## Versioning
+
+This repo has no CI/release automation — version bumps are manual. If your PR fixes a
+bug or adds a feature that warrants a release, bump the version yourself as part of the
+PR:
+
+- Patch (`0.2.1` → `0.2.2`) for bug fixes
+- Minor (`0.2.x` → `0.3.0`) for new features
+- Update the version in **both** `pyproject.toml` and `degoogle_photos/__init__.py` —
+  they must match
+- Put the bump in its own commit, separate from the code change
+
+Docs-only or test-only PRs don't need a version bump.
+
 ## Project Structure
 ```
 degoogle_photos/
